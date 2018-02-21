@@ -11,6 +11,7 @@
 #include <JHPWMPCA9685.h>
 #include <iostream>
 #include <omp.h>
+#include <netdb.h> 
 
 
 #define PWM_FULL_REVERSE 204	// Full right
@@ -26,8 +27,12 @@ int area[256];
 //Prints an error message with the provided message and closes program
 void error(const char *msg);
 
-void run_server(int starting_portno);
+void area_retriever(int starting_portno);
 /** server**/
+
+void run_client(void);
+
+void listener(void);
 
 int main() {
 /** server**/
@@ -36,7 +41,7 @@ int main() {
      int portno = 13000;
      #pragma omp parallel num_threads(2)
      if(omp_get_thread_num() == 0)   {  
-          run_server(portno);
+          area_retriever(portno);
      } else { 
 /** server**/
 
@@ -86,6 +91,15 @@ int main() {
 	    currentChannel = ESC_CHANNEL;
 	    currentPWM = PWM_NEUTRAL;
 	    pca9685->setPWM(currentChannel, 0, currentPWM);
+	    #pragma omp parallel num_threads(3)
+	    {
+		switch(omp_get_thread_num()) {
+		    case 2:
+			listener();
+		    case 3:
+			run_client();
+		}
+	    }
 	}
 	
 	if(inp == 's') { 
@@ -150,14 +164,12 @@ void error(const char *msg)
     exit(1);
 }
 
-void run_server(int starting_portno) {
+void area_retriever(int starting_portno) {
      int sockfd, newsockfd, portno;
      socklen_t clilen;
      int buffer[256];
      struct sockaddr_in serv_addr, cli_addr;
      int n;
-
-
      sockfd = socket(AF_INET, SOCK_STREAM, 0);
      if (sockfd < 0) 
         error("ERROR opening socket");
@@ -193,4 +205,87 @@ void run_server(int starting_portno) {
      close(newsockfd);
      close(sockfd);
 }
+
+void run_client(void) {
+	int sockfd, n;
+	struct sockaddr_in serv_addr;
+	struct hostent *server;
+	char buffer[256];
+	char host[14];
+	strcpy(host,"192.168.0.101");
+	
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0)
+		error("ERROR opening socket");
+	server = gethostbyname(host);
+	if (server == NULL) {
+		fprintf(stderr, "ERROR, no such host\n");
+		exit(0);
+	}
+	bzero((char *)&serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	bcopy((char *)server->h_addr,
+		(char *)&serv_addr.sin_addr.s_addr,
+		server->h_length);
+	serv_addr.sin_port = htons(12345);
+	if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+		error("ERROR connecting");
+	bzero(buffer, 256);
+	printf("type something");
+	fgets(buffer, 255, stdin);
+	n = write(sockfd, buffer, strlen(buffer));
+	if (n < 0)
+		error("ERROR writing to socket");
+	bzero(buffer, 256);
+	n = read(sockfd, buffer, 255);
+	if (n < 0)
+		error("ERROR reading from socket");
+	printf("%s\n", buffer);
+	close(sockfd);
+}
+
+void listener(void) {
+	int sockfd, newsockfd, n, stop;
+	socklen_t clilen;
+	char buffer[256];
+	struct sockaddr_in serv_addr, cli_addr;
+	int portno = 21345;
+
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0)
+		error("ERROR opening socket");
+	bzero((char *)&serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	serv_addr.sin_port = htons(portno);
+	if (bind(sockfd, (struct sockaddr *) &serv_addr,
+		sizeof(serv_addr)) < 0)
+		error("ERROR on binding");
+
+	fprintf(stdout, "Listening on port %i\n", portno);
+	char bufferend[] = "close socket\n";
+	while (1) {
+		listen(sockfd, 5);
+		clilen = sizeof(cli_addr);
+		newsockfd = accept(sockfd,
+			(struct sockaddr *) &cli_addr,
+			&clilen);
+		if (newsockfd < 0)
+			error("ERROR on accept");
+		bzero(buffer, 256);
+		n = read(newsockfd, buffer, 255);
+		if (n < 0) error("ERROR reading from socket");
+		printf("Comparing message\n");
+		stop = memcmp(buffer, bufferend, sizeof(bufferend));
+		printf("here is stop %d \n", stop);
+		if (stop == 0) break;
+		printf("Here is the message on port %i: %s \n", portno, buffer);
+		n = write(newsockfd, "Acknowledge", 50);
+		if (n < 0) error("ERROR writing to socket");
+	}
+
+	close(newsockfd);
+	close(sockfd);
+}
+
 
