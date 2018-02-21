@@ -23,27 +23,30 @@
 
 int area[256];
 
-/** server**/
+/** area**/
 //Prints an error message with the provided message and closes program
 void error(const char *msg);
 
 void area_retriever(int starting_portno);
-/** server**/
 
+
+/** intersection**/
 void run_client(void);
 
 void listener(void);
 
-int main() {
-/** server**/
-     //Declare variables
 
+int main() {
+/** area**/
+     //Declare variables
+     omp_set_nested(1);
      int portno = 13000;
      #pragma omp parallel num_threads(2)
      if(omp_get_thread_num() == 0)   {  
           area_retriever(portno);
      } else { 
-/** server**/
+
+/** motor control**/
 
     PCA9685 *pca9685 = new PCA9685() ;
    
@@ -60,7 +63,7 @@ int main() {
 
     int currentChannel = 0;
 //    float currentPWM = PWM_NEUTRAL;
-    float currentPWM = 338;		// debug start w/ speed
+    float currentPWM = 342;		// debug start w/ speed
     float current_pwm_angle = PWM_NEUTRAL;
     sleep(5);
     pca9685->setPWM(ESC_CHANNEL,0,currentPWM);
@@ -78,15 +81,16 @@ int main() {
 
     while(pca9685->error >= 0){
 
-	char inp = std::cin.get();
-	//char inp = 'h';
-	printf("area is: %i \n", area[0]);
+	//char inp = std::cin.get();
+	char inp = 'h';
+
 	if(inp == 'i') {
-	    printf("Stop sign detected\n");
+	    printf("stop sign detected\n");
 	    currentChannel = ESC_CHANNEL;
 	    currentPWM = PWM_NEUTRAL;
 	    pca9685->setPWM(currentChannel, 0, currentPWM);
 	}
+
 	if(area[0] > 4000) {
 	    currentChannel = ESC_CHANNEL;
 	    currentPWM = PWM_NEUTRAL;
@@ -94,14 +98,22 @@ int main() {
 	    #pragma omp parallel num_threads(3)
 	    {
 		switch(omp_get_thread_num()) {
-		    case 2:
+		    case 1:
+			printf("listening %i\n", omp_get_thread_num());
 			listener();
-		    case 3:
+			currentChannel = ESC_CHANNEL;
+	    		currentPWM = 344;
+			pca9685->setPWM(currentChannel, 0, currentPWM);
+		    case 2:
+			printf("clienting %i\n", omp_get_thread_num());
 			run_client();
+		    default:
+			printf("defaulting %i\n", omp_get_thread_num());
+			break;
 		}
 	    }
 	}
-	
+
 	if(inp == 's') { 
 	   printf("Decreasing speed\n");
 	   currentChannel = ESC_CHANNEL;
@@ -231,8 +243,7 @@ void run_client(void) {
 	if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
 		error("ERROR connecting");
 	bzero(buffer, 256);
-	printf("type something");
-	fgets(buffer, 255, stdin);
+	strcpy(buffer,"here!");
 	n = write(sockfd, buffer, strlen(buffer));
 	if (n < 0)
 		error("ERROR writing to socket");
@@ -264,25 +275,19 @@ void listener(void) {
 
 	fprintf(stdout, "Listening on port %i\n", portno);
 	char bufferend[] = "close socket\n";
-	while (1) {
-		listen(sockfd, 5);
-		clilen = sizeof(cli_addr);
-		newsockfd = accept(sockfd,
-			(struct sockaddr *) &cli_addr,
-			&clilen);
-		if (newsockfd < 0)
-			error("ERROR on accept");
-		bzero(buffer, 256);
-		n = read(newsockfd, buffer, 255);
-		if (n < 0) error("ERROR reading from socket");
-		printf("Comparing message\n");
-		stop = memcmp(buffer, bufferend, sizeof(bufferend));
-		printf("here is stop %d \n", stop);
-		if (stop == 0) break;
-		printf("Here is the message on port %i: %s \n", portno, buffer);
-		n = write(newsockfd, "Acknowledge", 50);
-		if (n < 0) error("ERROR writing to socket");
-	}
+	listen(sockfd, 5);
+	clilen = sizeof(cli_addr);
+	newsockfd = accept(sockfd,
+		(struct sockaddr *) &cli_addr,
+		&clilen);
+	if (newsockfd < 0)
+		error("ERROR on accept");
+	bzero(buffer, 256);
+	n = read(newsockfd, buffer, 255);
+	if (n < 0) error("ERROR reading from socket");
+	printf("Here is the message: %s \n", buffer);
+	n = write(newsockfd, "Acknowledge", 50);
+	if (n < 0) error("ERROR writing to socket");
 
 	close(newsockfd);
 	close(sockfd);
