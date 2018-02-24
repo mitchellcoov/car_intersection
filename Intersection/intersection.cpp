@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <omp.h>
 #include <queue>
+#include <string>
 
 //Prints an error message with the provided message and closes program
 void error(const char *msg);
@@ -19,9 +20,11 @@ void listener(int starting_portno);
 
 void handler(void);
 
-void sendGoMessage(sockaddr_in cli_addr);
+void sendMessage(sockaddr_in cli_addr, const char message[], int portno);
 
 std::queue<sockaddr_in> q;
+
+int clientPorts[2];
 
 int main(int argc, char *argv[])
 {
@@ -91,6 +94,12 @@ void listener(int portno) {
 		stop = memcmp(buffer, bufferend, sizeof(bufferend));
 		if (stop == 0) break;
 		printf("Here is the message: %s \n", buffer);
+		const char s[2] = ":";
+		char *messagePorts = strtok(buffer,s);
+		printf("message ports 0: %s\n", messagePorts);
+		clientPorts[0] = std::stoi(messagePorts);
+		messagePorts = strtok(NULL,s);
+		clientPorts[1] = std::stoi(messagePorts);
 		//add to queue
 		q.push(cli_addr);
 		n = write(newsockfd, "I got your message, you were added to the queue", 50);
@@ -104,20 +113,22 @@ void listener(int portno) {
 void handler(void) {
 	while (1) {
 		if (!q.empty()) {
-			printf("queue isnt empty");
-			sleep(1);
-			sendGoMessage(q.front());
+			printf("queue isnt empty\n");
+			sleep(10);
+			printf("sending message to %d\n", clientPorts[0]);
+			sendMessage(q.front(), "proceed", clientPorts[0]);
+			sleep(10);
+			sendMessage(q.front(), "cleared", clientPorts[1]);
 			q.pop();
 		}
 	}
 	
 }
 
-void sendGoMessage(sockaddr_in cli_addr) {
-	int sockfd, portno, n;
+void sendMessage(sockaddr_in cli_addr, const char message[], int portno) {
+	int sockfd, n;
 	struct sockaddr_in serv_addr;
 	char buffer[256];
-	portno=21345;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
@@ -132,8 +143,8 @@ void sendGoMessage(sockaddr_in cli_addr) {
 	if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
 		error("ERROR connecting");
 	bzero(buffer, 256);
-	printf("replying...");
-	strcpy(buffer,"proceed");
+	printf("replying with message: %s...\n",message);
+	strcpy(buffer,message);
 	n = write(sockfd, buffer, strlen(buffer));
 	if (n < 0)
 		error("ERROR writing to socket");
