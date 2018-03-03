@@ -1,9 +1,5 @@
-CC=g++
+all: lanedetect
 
-all: server client
+lanedetect:lanedetect.cpp
+	g++ lanedetect.cpp -o lanedetect `pkg-config --cflags --libs opencv`
 
-server: server.cpp
-	$(CC) -std=c++11 -fopenmp -o server server.cpp
-
-client: client.cpp
-	$(CC) -std=c++11 -fopenmp -o client client.cpp
