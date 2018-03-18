@@ -1,6 +1,7 @@
 // Keyboard_Control.cpp
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 #include <string>
 #include <sstream>
@@ -18,7 +19,7 @@
 
 #define PWM_FULL_REVERSE 204	// Full right
 #define PWM_NEUTRAL 307		// Center (ESC range from ??? to 339
-#define PWM_FULL_FORWARD 509	// Full left
+#define PWM_FULL_FORWARD 410	// Full left OR 509
 
 #define ESC_CHANNEL 0
 #define STEERING_CHANNEL 1
@@ -78,7 +79,7 @@ int main() {
     pca9685->setPWMFrequency(50);
 
     // init wheels to center and motor speed to 0
-
+	// TODO Call laneFollower here instead of the following hardcoded values
     int currentChannel = 0;
 //    float currentPWM = PWM_NEUTRAL;
     float currentPWM = 342;		// debug start w/ speed
@@ -99,109 +100,109 @@ int main() {
 
     while(pca9685->error >= 0){
 
-	//char inp = std::cin.get();
-	char inp = 'h';
+		//char inp = std::cin.get();
+		char inp = 'h';
 
-	if(inp == 'i') {
-	    printf("stop sign detected\n");
-	    currentChannel = ESC_CHANNEL;
-	    currentPWM = PWM_NEUTRAL;
-	    pca9685->setPWM(currentChannel, 0, currentPWM);
-	}
-
-	if(area[0] > 4000) {
-	    currentChannel = ESC_CHANNEL;
-	    currentPWM = PWM_NEUTRAL;
-	    pca9685->setPWM(currentChannel, 0, currentPWM);
-		    listeningPorts[0] = randPort((float)rand());
-		    listeningPorts[1] = randPort((float)rand());
-		    ss0 << listeningPorts[0];
-	
-		    ss1 << listeningPorts[1];
-		
-		    std::string stringPorts = ss0.str() + ":" + ss1.str();
-		    std::cout <<"string ports are " << stringPorts << '\n';
-		    stringListeningPorts = stringPorts.c_str();
-		    printf("char ports are %s", stringListeningPorts);
-
-		    ss0.clear();
-		    ss0.str("");
-		    ss1.clear();
-		    ss1.str("");
-	    #pragma omp parallel num_threads(3)
-	    {
-
-		printf("number of threads: %i\n", omp_get_num_threads());
-		switch(omp_get_thread_num()) {
-		    case 1:
-			printf("listening %i\n", omp_get_thread_num());
-			recentStop = true;
-
-			// Listen for the go ahead
-			listener(listeningPorts[0]);
+		if(inp == 'i') {
+			printf("stop sign detected\n");
 			currentChannel = ESC_CHANNEL;
-	    		currentPWM = 342;
+			currentPWM = PWM_NEUTRAL;
 			pca9685->setPWM(currentChannel, 0, currentPWM);
-
-			// Listen for cleared intersection
-			listener(listeningPorts[1]);
-			recentStop = false;
-			break;
-
-		    case 2:
-			printf("clienting %i\n", omp_get_thread_num());
-			run_client();
-			break;
 		}
-	    }
-	}
 
-	if(inp == 's') { 
-	   printf("Decreasing speed\n");
-	   currentChannel = ESC_CHANNEL;
-	   if(currentPWM > 337) {
-		currentPWM--;
-		printf("Current speed = %f\n", currentPWM);
-	        pca9685->setPWM(currentChannel, 0, currentPWM);
-	   }
-	}
+		if(area[0] > 4000) {
+			currentChannel = ESC_CHANNEL;
+			currentPWM = PWM_NEUTRAL;
+			pca9685->setPWM(currentChannel, 0, currentPWM);
+				listeningPorts[0] = randPort((float)rand());
+				listeningPorts[1] = randPort((float)rand());
+				ss0 << listeningPorts[0];
+	
+				ss1 << listeningPorts[1];
+		
+				std::string stringPorts = ss0.str() + ":" + ss1.str();
+				std::cout <<"string ports are " << stringPorts << '\n';
+				stringListeningPorts = stringPorts.c_str();
+				printf("char ports are %s", stringListeningPorts);
 
-	if(inp == 'w') {
-	   printf("Increasing speed\n");
-	   currentChannel = ESC_CHANNEL;
+				ss0.clear();
+				ss0.str("");
+				ss1.clear();
+				ss1.str("");
+			#pragma omp parallel num_threads(3)
+			{
 
-	   // increase to 340 instead if between ??? and 338
-	   if(currentPWM <= 338) {
-	       currentPWM = 340;
-	   } else {
-	       currentPWM++;
-	   }
-	   printf("Current speed = %f\n", currentPWM);
-	   pca9685->setPWM(currentChannel, 0, currentPWM);
-	}
+			printf("number of threads: %i\n", omp_get_num_threads());
+			switch(omp_get_thread_num()) {
+				case 1:
+				printf("listening %i\n", omp_get_thread_num());
+				recentStop = true;
 
-	if(inp == 'a') {
-	   printf("turning left\n");
-	   currentChannel = STEERING_CHANNEL;
-	   current_pwm_angle+=20;
-	   pca9685->setPWM(currentChannel, 0, current_pwm_angle);
-	}
+				// Listen for the go ahead
+				listener(listeningPorts[0]);
+				// TODO Call laneFollower here instead of the following hardcoded values
+				currentChannel = ESC_CHANNEL;
+					currentPWM = 342;
+				pca9685->setPWM(currentChannel, 0, currentPWM);
 
-	if(inp == 'd') {
-	   printf("turning right\n");
-	   currentChannel = STEERING_CHANNEL;
-	   current_pwm_angle-=20;
-	   pca9685->setPWM(currentChannel, 0, current_pwm_angle);
-	}
-	    if(inp == 'e') {
-	    printf("Stopping car\n");
-	    pca9685->setPWM(ESC_CHANNEL,0,PWM_NEUTRAL);
-    	    pca9685->setPWM(STEERING_CHANNEL,0,PWM_NEUTRAL);
-   	    pca9685->closePCA9685();
+				// Listen for cleared intersection
+				listener(listeningPorts[1]);
+				recentStop = false;
+				break;
 
-    	    tcsetattr(STDIN_FILENO, TCSANOW, &old_t);
-	    
-	}
+				case 2:
+				printf("clienting %i\n", omp_get_thread_num());
+				run_client();
+				break;
+			}
+			}
+		}
+
+		if(inp == 's') { 
+		   printf("Decreasing speed\n");
+		   currentChannel = ESC_CHANNEL;
+		   if(currentPWM > 337) {
+			currentPWM--;
+			printf("Current speed = %f\n", currentPWM);
+			    pca9685->setPWM(currentChannel, 0, currentPWM);
+		   }
+		}
+
+		if(inp == 'w') {
+		   printf("Increasing speed\n");
+		   currentChannel = ESC_CHANNEL;
+
+		   // increase to 340 instead if between ??? and 338
+		   if(currentPWM <= 338) {
+			   currentPWM = 340;
+		   } else {
+			   currentPWM++;
+		   }
+		   printf("Current speed = %f\n", currentPWM);
+		   pca9685->setPWM(currentChannel, 0, currentPWM);
+		}
+
+		if(inp == 'a') {
+		   printf("turning left\n");
+		   currentChannel = STEERING_CHANNEL;
+		   current_pwm_angle+=20;
+		   pca9685->setPWM(currentChannel, 0, current_pwm_angle);
+		}
+
+		if(inp == 'd') {
+		   printf("turning right\n");
+		   currentChannel = STEERING_CHANNEL;
+		   current_pwm_angle-=20;
+		   pca9685->setPWM(currentChannel, 0, current_pwm_angle);
+		}
+		if(inp == 'e') {
+			printf("Stopping car\n");
+			pca9685->setPWM(ESC_CHANNEL,0,PWM_NEUTRAL);
+			pca9685->setPWM(STEERING_CHANNEL,0,PWM_NEUTRAL);
+	   	    pca9685->closePCA9685();
+
+			tcsetattr(STDIN_FILENO, TCSANOW, &old_t);
+		}
     }
     pca9685->setPWM(ESC_CHANNEL,0,PWM_NEUTRAL);
     pca9685->setPWM(STEERING_CHANNEL,0,PWM_NEUTRAL);
@@ -354,5 +355,60 @@ int randPort(float irand) {
     float frand = (irand / RAND_MAX)*(100) + 21300;
     return (int)frand;
 }
+
+
+// notes for implementation:
+// Maybe do some sort of offset to make negative/positive values from the
+// difference of car and lane midpoint easier to work with
+// Maybe only make adjustments when midPointDiff is greater than some value?
+
+// Skeleton for lane follower
+// Max left turn value  = PWM_FULL_FORWARD
+// Max right turn value = PWM_FULL_REVERSE
+// Straight angle value	= PWM_NEUTRAL
+// Max speed value		= unknown
+// Stop speed value		= PWM_NEUTRAL
+void laneFollower(/**arguments from lane detection**/) {	// TODO forward declaration
+
+	// offset pwm signal values for easier caculations
+	// Neutral value becomes 0
+	// Full right becomes -103
+	// Full left becomes 103
+	int offset = PWM_NEUTRAL;
+	int OFFSET_FULL_FORWARD = PWM_FULL_FORWARD - offset;
+	int OFFSET_FULL_REVERSE = PWM_FULL_REVERSE - offset;
+	int OFFSET_FULL_NEUTRAL = PWM_FULL_NEUTRAL - offset;
+
+	//calculate midPointDiff from function parameters
+	float midPointDiff = 0;	// TODO calc from function args
+
+	// TODO figure out constants empirically
+	// angle constants to properly tune speed/angle changes
+	// careful! these are floats and pwm needs to be an int, remember to cast
+	float speedConstant = 1.f;
+	float angleConstant = 1.f;
+
+	// motor controls for when the car is not in center of the lane
+	if (fabs(midPointDiff)) > 0 {
+
+		// Skeleton for changing speed
+		// The greater the difference between car and lane midpoint
+		// The lower the currentPWM should be set
+		currentChannel = ESC_CHANNEL;
+		currentPWM = OFFSET_FULL_FORWARD * (1/midPointDiff) * speedConstant;
+		currentPWM += offset;	// remove offset
+		pca9685->setPWM(currentChannel, 0, currentPWM);
+
+		// Skeleton for changing direction
+		// The greater the difference between car and lane midpoint
+		// the greater the current_pwm_angle should be set
+		currentChannel = STEERING_CHANNEL;
+		current_pwm_angle = OFFSET_FULL_FORWARD * midPointDiff * angleConstant;
+		current_pwm_angle += offset;	// remove offset
+		pca9685->setPWM(currentChannel, 0, current_pwm_angle);
+	}
+}
+
+
 
 
