@@ -29,8 +29,7 @@ void handler(void);
 
 void sendMessage(sockaddr_in cli_addr, const char message[], int portno);
 
-void point_retriever(int starting_portno);
-
+void pointRetriever(int starting_portno);
 
 std::queue<sockaddr_in> q;
 
@@ -80,6 +79,9 @@ class Line
 		Point getPoint1() {
 			return p1;
 		}
+		Point getPoint2() {
+			return p2;
+		}
 		
 		double getSlope() {
 			return slope;
@@ -88,11 +90,13 @@ class Line
 			return yIntersect;
 		}
 		bool isIntersectLegal(Point p) {
-			if (-1 <= slope && slope <= 1) {
-				return (std::min(p1.getX(),p2.getX()) <= p.getX() && p.getX() <= std::max(p1.getX(),p2.getX()));
+			return (std::min(p1.getX(),p2.getX()) <= p.getX() && p.getX() <= std::max(p1.getX(),p2.getX()));
+		/**			
 			} else {
 				return (std::min(p1.getY(),p2.getY()) <= p.getY() && p.getY() <= std::max(p1.getY(),p2.getY ()));
-			}	
+			}		
+		**/
+				
 		}
 
 };
@@ -101,14 +105,21 @@ bool doLinesIntersect(Line l1, Line l2);
 
 Line extendPoint(Point p);
 
+void initIntersection();
 
-Point intersectionPoints[4];
+bool inIntersection(Line lines[], Line boundLines[]);
+
+Point intPoints[4];
+Line intLines[4];
+Point blPoints[4];
+Line blLines[4];
 
 
 int main(int argc, char *argv[])
 {
 	//Declare variables
 	int thread_count = 3;
+	initIntersection();
 
 	if (argc < 2) {
 		fprintf(stderr, "ERROR, no port provided\n");
@@ -126,7 +137,7 @@ int main(int argc, char *argv[])
 			case 1:
 				handler();
 			case 2:
-				point_retriever(portnopoint);
+				pointRetriever(portnopoint);
 			default:
 				break;
 		}
@@ -194,19 +205,11 @@ void listener(int portno) {
 }
 
 void handler(void) {
-
-	intersectionPoints[0] = Point(680, 240);
-	intersectionPoints[1] = Point(357, 66);
-	intersectionPoints[2] = Point(40, 290);
-	intersectionPoints[3] = Point(340, 450);
-
-	Line intLines[4];
-	intLines[0] = Line(intersectionPoints[0],intersectionPoints[1]);
-	intLines[1] = Line(intersectionPoints[0],intersectionPoints[2]);
-	intLines[2] = Line(intersectionPoints[1],intersectionPoints[3]);
-	intLines[3] = Line(intersectionPoints[2],intersectionPoints[3]);
+	/**
 	bool isCarPointIn[4] = {false};
-	
+	int countTrues = 0;
+	bool lIntersections[4] = {false};
+	**/
 
 	while (1) {
 	
@@ -222,10 +225,11 @@ void handler(void) {
 		lines[2] = extendPoint(points[2]);
 		lines[3] = extendPoint(points[3]);
 
-		
-		
+		inIntersection(lines, intLines);
+	
+/**		
 		for (int i = 0; i < 4; i++) {
-			bool lIntersections[4] = {false};
+			
 			for (int j = 0; j < 4; j++) {
 				lIntersections[j] = doLinesIntersect(lines[i], intLines[j]);
 			}
@@ -233,22 +237,25 @@ void handler(void) {
 			for (int j = 0; j < 4; j++) {
 				if (lIntersections[j]) { 
 					countIntersects++;
+					lIntersections[j] = false;
 				}
 			}
 			if (countIntersects == 1) isCarPointIn[i] = true;
-			printf("count intersects %d\n", countIntersects);
+			//printf("count intersects %d\n", countIntersects);
 		}
 		
-		int countTrues = 0;
+		countTrues = 0;
 		for (int i = 0; i < 4; i++) {
-			if (isCarPointIn[i]) countTrues++;
+			if (isCarPointIn[i]) {
+				countTrues++;
+				isCarPointIn[i] = false;
+			}
 		}
 
-		isCarPointIn[4] = {false};
-		//printf("count trues %d", countTrues);
-		//if (countTrues >= 2) printf("car in intersection");
+		printf("count trues %d\n", countTrues);
+		if (countTrues >= 2) printf("car in intersection\n");
 		
-/**
+
 		if (!q.empty()) {
 			printf("queue isnt empty\n");
 			
@@ -299,7 +306,7 @@ void sendMessage(sockaddr_in cli_addr, const char message[], int portno) {
 	close(sockfd);
 }
 
-void point_retriever(int starting_portno) {
+void pointRetriever(int starting_portno) {
 
     int sockfd, newsockfd, portno;
     socklen_t clilen;
@@ -358,12 +365,39 @@ void point_retriever(int starting_portno) {
 }
 
 bool doLinesIntersect(Line l1, Line l2) {
+
+	int x1,x2,x3,x4;
+	int y1,y2,y3,y4;
+	x1 = l1.getPoint1().getX();
+	x2 = l1.getPoint2().getX();
+	x3 = l2.getPoint1().getX();
+	x4 = l2.getPoint2().getX();
+	y1 = l1.getPoint1().getY();
+	y2 = l1.getPoint2().getY();
+	y3 = l2.getPoint1().getY();
+	y4 = l2.getPoint2().getY();
+	
+	int noma = (y3-y4)*(x1-x3)+(x4-x3)*(y1-y3);
+	int denoma = (x4-x3)*(y1-y2)-(x1-x2)*(y4-y3);
+	int nomb = (y1-y2)*(x1-x3)+(x2-x1)*(y1-y3);
+	int denomb = (x4-x3)*(y1-y2)-(x1-x2)*(y4-y3);
+	double ta = (double)noma/denoma;
+	double tb = (double)nomb/denomb;
+
+	if (ta <= 1 && ta >= 0 && tb <= 1 && tb >= 0) {
+		//printf("point 1 %d,%d %d,%d point 2 %d,%d %d,%d here is ta %f here is tb %f\n", x1,x2,x3,x4,y1,y2,y3,y4,ta,tb);
+		return true;
+	}
+	return false;
+
+	/**
 	double x = (l2.getYIntersect() - l1.getYIntersect())/(l1.getSlope() - l2.getSlope());
 	double y = (l1.getYIntersect()*l1.getSlope() - l2.getYIntersect()*l2.getSlope())/(l1.getSlope() - l2.getSlope());
 	
 	Point p = Point(x,y);
 	if (x < l1.getPoint1().getX()) return false;
 	return l2.isIntersectLegal(p);
+	**/
 	
 }
 
@@ -372,4 +406,65 @@ Line extendPoint(Point p) {
 	//printf("pex x is %d pex y is %d\n",pex.getX(), pex.getY());
 	return Line(p, pex);
 }
+
+void initIntersection() {
+	intPoints[0] = Point(680, 240);
+	intPoints[1] = Point(357, 66);
+	intPoints[2] = Point(40, 290);
+	intPoints[3] = Point(340, 450);
+	intLines[0] = Line(intPoints[0],intPoints[1]);
+	intLines[1] = Line(intPoints[0],intPoints[2]);
+	intLines[2] = Line(intPoints[1],intPoints[3]);
+	intLines[3] = Line(intPoints[2],intPoints[3]);
+
+	blPoints[0] = Point(180, 380);
+	blPoints[1] = Point(1, 475);
+	blPoints[2] = Point(300, 520);
+	blPoints[3] = Point(340, 470);
+	blLines[0] = Line(blPoints[0],blPoints[1]);
+	blLines[1] = Line(blPoints[0],blPoints[2]);
+	blLines[2] = Line(blPoints[1],blPoints[3]);
+	blLines[3] = Line(blPoints[2],blPoints[3]);
+	
+}
+
+bool inIntersection(Line lines[], Line boundLines[]) {
+	bool isCarPointIn[4] = {false};
+	int countTrues = 0;
+	bool lIntersections[4] = {false};
+
+	for (int i = 0; i < 4; i++) {
+			
+			for (int j = 0; j < 4; j++) {
+				lIntersections[j] = doLinesIntersect(lines[i], boundLines[j]);
+			}
+			int countIntersects = 0;
+			for (int j = 0; j < 4; j++) {
+				if (lIntersections[j]) { 
+					countIntersects++;
+					lIntersections[j] = false;
+				}
+			}
+			if (countIntersects == 1) isCarPointIn[i] = true;
+			//printf("count intersects %d\n", countIntersects);
+		}
+		
+		countTrues = 0;
+		for (int i = 0; i < 4; i++) {
+			if (isCarPointIn[i]) {
+				countTrues++;
+				isCarPointIn[i] = false;
+			}
+		}
+
+		printf("count trues %d\n", countTrues);
+		if (countTrues >= 2) {
+			printf("car in intersection\n");
+			return true;
+		}
+		return false;
+}
+
+
+
 
